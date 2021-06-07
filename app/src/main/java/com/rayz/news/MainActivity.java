@@ -19,7 +19,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView mrv;
-    private String url="https://news-at.zhihu.com/api/4/news/latest";
+    private String url="http://c.m.163.com/nc/article/headline/T1348647853363/0-40.html";
     private MyAdapter md;
     private OKHttp http;
     private ArrayList<Bean.Data> mlist=new ArrayList<>();
