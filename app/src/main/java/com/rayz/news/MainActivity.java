@@ -1,10 +1,14 @@
 package com.rayz.news;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -12,63 +16,103 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.gson.Gson;
+import com.rayz.news.model.NewsBean;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 
 public class MainActivity extends AppCompatActivity {
-    private RecyclerView mrv;
-    private String url="http://c.m.163.com/nc/article/headline/T1348647853363/0-40.html";
-    private MyAdapter md;
-    private OKHttp http;
-    private ArrayList<Bean.Data> mlist=new ArrayList<>();
-    @SuppressLint("HandlerLeak")
-    public Handler hand=new Handler(){
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            if (msg.what==1){
-                Gson gson=new Gson();
-                Bean bean = gson.fromJson(msg.obj.toString(), Bean.class);
-                // mlist=(ArrayList<NewsData.DataBean>) newsData.getData();
-                mlist=(ArrayList<Bean.Data>) bean.getData();
-                md.setdata((ArrayList<Bean.Data>) mlist);
-                md.notifyDataSetChanged();
-
-            }
-        }
-    };
+    private OkHttpClient client=new OkHttpClient();
+    private ListView listView;
+    private Handler handler;
+    private List<NewsBean.Second.Third> list;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mrv=(RecyclerView)findViewById(R.id.recy);
-        initdata();
-        mrv.setLayoutManager(new LinearLayoutManager(this));
-        md=new MyAdapter(this,mlist);
-        mrv.setAdapter(md);
-
-        //RecyclerView条目的点击事件
-        md.setOnItemClickListener(new MyAdapter.OnItemClickListener() {
+        listView= (ListView) findViewById(R.id.lv_loaddata);
+        if (!Utils.isNetworkAvailable(MainActivity.this))
+        {
+            Toast.makeText(MainActivity.this,"请检查网络",Toast.LENGTH_SHORT).show();
+        }
+        loadData();
+        handler=new MyHandler();
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onItemClick(View view, int postion) {
-                Toast.makeText(MainActivity.this, mlist.get(postion).getTitle(), Toast.LENGTH_SHORT).show();
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Intent intent=new Intent(MainActivity.this,NewsDetailActivity.class);
+                String url=NewsListBaseAdapter.list.get(position).url;
+                intent.putExtra("url",url);
+                startActivity(intent);
+                Log.i("Simon",url);
             }
         });
     }
-    private void initdata() {
-        OKHttp http=new OKHttp();
-        http.getdata(url, this);
+    class MyHandler extends  Handler
+    {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            Log.i(">>>>>>>",Thread.currentThread().getName());
+            list= (List<NewsBean.Second.Third>) msg.obj;
+            listView.setAdapter(new NewsListBaseAdapter(list,MainActivity.this));
+        }
     }
-    public void callback(String str) {
-        Message msg = Message.obtain();
-        msg.what=1;
-        msg.obj=str;
-        hand.sendMessage(msg);
 
-    }
-    public void err(int code, String s) {
 
+    private void loadData() {
+        final Gson gson =new Gson();
+        final Request request=new Request.Builder()
+                .get()
+                .url("http://v.juhe.cn/toutiao/index?type=keji&key=65d4c89f2460e131bd8b288f3f70bff6")
+                .build();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Response response;
+                try {
+                    response=client.newCall(request).execute();
+                    if (response.isSuccessful())
+                    {
+                        String content=response.body().string();
+                        NewsBean newsBean=gson.fromJson(content,NewsBean.class);
+
+                        final String reason=newsBean.reason;
+
+                        NewsBean.Second second=newsBean.result;
+                        final List<NewsBean.Second.Third> list=second.data;
+                        //在主线程更新UI
+//                                runOnUiThread(new Runnable() {
+//                                        @Override
+//                                         public void run() {
+//                                       listView.setAdapter(new NewsListBaseAdapter(list,MainActivity.this));
+//                                    }
+//                                });
+                        Message msg=handler.obtainMessage();
+                        msg.obj=list;
+                        handler.sendMessage(msg);//sendMessage()方法，在主线程或者Worker Thread线程中发送，都是可以的，都可以被取到
+//                            listView.post(new Runnable() {
+//                                @Override
+//                                public void run() {
+//                                    listView.setAdapter(new NewsListBaseAdapter(list,MainActivity.this));
+//                                }
+//                            });
+                        String title=list.get(1).title;
+                        Log.i(">>>>>>>>>>>>>>>>>>",title);
+
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
+
+
 }
